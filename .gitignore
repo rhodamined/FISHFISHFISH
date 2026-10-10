@@ -1,3 +1,18 @@
+# Hidden
+.venv
+.env
+/old
+
+
+# Data
+/data
+keys
+save.json
+/archive
+
+# MAC
+.DS_Store
+
 # Logs
 logs
 *.log
