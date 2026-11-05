@@ -1,0 +1,15 @@
+:: StoryTitle
+FISHFISHFISH
+
+:: StoryData
+{
+  "ifid": "F6F791C8-1A6F-44C7-B2D9-EA4EA48FB79B",
+  "format": "SugarCube",
+  "format-version": "2.36.1",
+  "start": "Start"
+}
+
+:: Start
+<p data-fish-connection>Connecting to game server...</p>
+
+The fish game is getting ready.

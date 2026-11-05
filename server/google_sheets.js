@@ -11,23 +11,12 @@ dotenv.config();
 const FISH_SHEETID = process.env.FISH_SHEETID;
 
 
-async function testServiceAccountAuth() {
-  const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
-  console.log(serviceAccountAuth.token); // prints the access token
-}
-
-async function testGoogleSheets() {
-  const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
-  const doc = new GoogleSpreadsheet(FISH_SHEETID, serviceAccountAuth); // pass in the access token
-
-  await doc.loadInfo(); // loads document properties and worksheets
-  console.log(doc.title);
-  console.log(doc.sheetCount);
-
-}
-
-
+// Persist the current fish rows to the first worksheet in the configured sheet.
 async function writeStateToGSheet(state) {
+  if (!FISH_SHEETID) {
+    throw new Error('FISH_SHEETID must be configured before writing game state to Google Sheets.');
+  }
+
   const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
   const doc = new GoogleSpreadsheet(FISH_SHEETID, serviceAccountAuth); // pass in the access token
 
@@ -70,12 +59,6 @@ async function writeStateToGSheet(state) {
   // c6.note = 'This is a note!';
   await sheet.saveUpdatedCells(); // save all updates in one call
 }
-
-// test
-(async () => {
-  // await testServiceAccountAuth();
-  await testGoogleSheets();
-})();
 
 module.exports = {
   writeStateToGSheet

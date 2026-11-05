@@ -1,10 +1,12 @@
 {
   "name": "fishfishfish",
   "version": "1.0.0",
-  "description": "FISH GAME FISH GAME FISH GAME",
-  "main": "index.js",
+  "description": "Tweego/SugarCube fish game with an Express and Socket.IO server",
+  "main": "server/index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build:client": "npm --prefix client run build",
+    "watch:client": "npm --prefix client run watch",
+    "start": "node server/index.js"
   },
   "repository": {
     "type": "git",

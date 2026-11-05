@@ -22,6 +22,7 @@ const impersonatedServiceAccount = process.env.SERVICE_ACCOUNT;
 const {GoogleAuth, Impersonated} = require('google-auth-library');
 const scopes = ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googleapis.com/auth/spreadsheets'];
 
+// Create a short-lived access token by impersonating the configured service account.
 async function getAccessTokenFromImpersonatedCredentials() {
   const googleAuth = new GoogleAuth({
     scopes: scopes,
