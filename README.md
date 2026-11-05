@@ -1,8 +1,8 @@
 # FISHFISHFISH
 
 FISHFISHFISH is a Tweego/SugarCube game with a Node.js server. Express serves
-the compiled story and a separate live dashboard; Socket.IO handles player
-game-code joins and dashboard updates.
+the compiled story and a separate live dashboard; Socket.IO handles Player ID
+joins and dashboard updates.
 
 ## Project structure
 
@@ -15,7 +15,7 @@ client/
   build.js            Tweego build wrapper
   dist/               Generated story and client assets
 dashboard/
-  index.html          Live game-code dashboard
+  index.html          Live Player ID dashboard
   dashboard.js        Dashboard Socket.IO client
   dashboard.css       Dashboard styling
 server/
@@ -34,8 +34,8 @@ origin. The dashboard is available at `/dashboard`.
 
 - Node.js 22 or newer and npm
 - Tweego installed and available on `PATH`
-- Access to a Google spreadsheet containing ten unique game codes in cells
-  `B2:B11` on its first worksheet
+- Access to a Google spreadsheet with player IDs in column B, starting at
+  cell `B2` on its first worksheet (currently ten Player IDs)
 - Google Application Default Credentials and permission to impersonate the
   configured service account
 
@@ -50,16 +50,18 @@ Set these variables in the repository-root `.env` file:
 FISH_SHEETID=your_spreadsheet_id
 SERVICE_ACCOUNT=service-account@project.iam.gserviceaccount.com
 GOOGLE_APPLICATION_CREDENTIALS=keys/your-credentials-file.json
+DASHBOARD_PASSWORD=jasper
 ```
 
 Keep the credentials JSON in the root `keys/` directory. Do not commit
 credentials or `.env` files.
 
-At startup, the server reads exactly ten codes from the first worksheet's
-`B2:B11` range. It trims whitespace, normalizes codes to uppercase, and
-requires every entry to be non-empty and unique. If Sheets cannot be read or
-the data is invalid, the server reports an error and does not start. Codes
-are loaded only at startup; restart the server to load spreadsheet changes.
+At startup, the server reads non-empty player IDs from the first worksheet's
+column B, starting at `B2` and continuing to the end of the worksheet. It
+trims whitespace, normalizes IDs to uppercase, and requires IDs to be
+unique. If Sheets cannot be read or the data is invalid, the server reports
+an error and does not start. The loader reads the whole column so more Player
+IDs can be added without changing the server's data-loading logic.
 
 ## Build and run
 
@@ -91,20 +93,26 @@ npm test
 
 ## Player join and reconnection
 
-The player enters a code in the story's join form. The client sends
-`game:join` with `{ "code": "..." }`. On success, the server replies with the
-canonical code and an opaque `playerToken`, then places the socket in that
-game's Socket.IO room. Each code can be claimed by only one player. A second
-player receives `game_code_taken`; the form clears the input and asks them to
-try another code.
+Each game has a unique six-character alphanumeric **Game ID**, generated when
+the server starts and whenever a new game begins. This identifies the game
+session and is shown on the dashboard and in server logs.
+
+The spreadsheet values are **Player IDs**: they identify individual player
+slots within the current game. The player enters a Player ID in the story's
+join form. The client sends `game:join` with `{ "playerId": "..." }`. On
+success, the server replies with the canonical Player ID and an opaque
+`playerToken`, then places the socket in that player's `player:<playerId>`
+Socket.IO room. Each Player ID can be claimed by only one player. A second
+player receives `player_id_taken`; the form clears the input and asks them to
+try another Player ID.
 
 Socket.IO automatically retries a dropped connection. After a successful
-join, the client stores the assigned code and `playerToken` in
+join, the client stores the assigned Player ID and `playerToken` in
 `sessionStorage`. When the socket reconnects, it resubmits both. The server
-recognizes the existing claim, restores the socket to the game's room, and
-marks the player connected. If the player disconnects, their code remains
+recognizes the existing claim, restores the socket to the player's room, and
+marks the player connected. If the player disconnects, their Player ID remains
 claimed and the dashboard reports them as disconnected; another player
-cannot take that code.
+cannot take that ID.
 
 The token is kept for the current browser tab session. This reconnect strategy
 and all game status are currently in-memory/session state, not durable
@@ -113,20 +121,34 @@ connection statuses; players must join again.
 
 ## Dashboard status
 
-The dashboard displays ten cards. Each card shows:
+The dashboard displays the current Game ID and one card per Player ID. Each
+card shows:
 
-- **Player status:** `Available` until a code is claimed, then `Player joined`.
+- **Player status:** `Available` until an ID is claimed, then `Player joined`.
 - **Connection status:** `Not connected` before a player joins, then
   `Connected` or `Disconnected` as the player's socket state changes.
 
-The dashboard subscribes with `dashboard:subscribe` and receives the current
-state through `dashboard:state`. The server broadcasts changes to connected
-dashboard clients.
+The dashboard subscribes with `dashboard:subscribe` and receives the Game ID
+and Player ID state through `dashboard:state`. The server broadcasts changes
+to connected dashboard clients.
+
+The dashboard requires the password `jasper` to subscribe to game state and
+start a new game. Set `DASHBOARD_PASSWORD` in the server environment to
+override it. A new game is started from the dashboard's **New game** button
+after a confirmation. The server notifies joined players, removes their
+sockets from player rooms, reloads and validates the Player IDs from Google
+Sheets, generates a new Game ID, and replaces the in-memory player list. This
+supports adding or changing IDs in the sheet between games. If the read or
+validation fails, the current game is left intact and the dashboard reports
+the refresh failure. Player clients clear their saved Player ID and token and
+return to the join form. The dashboard password is a simple development gate;
+deploy behind HTTPS and change the default before exposing the app publicly.
 
 ## Current scope
 
-The game-code registry and join status are held in memory. Google Sheets is
-currently read at startup; the `writeStateToGSheet` helper is not wired into
-gameplay. Durable game sessions, persistent player identity, refresh of
-spreadsheet data without restart, and game-specific events remain future
-work.
+The Game ID, Player ID registry, and join status are held in memory. Google
+Sheets is read at startup and when a new game starts; the `writeStateToGSheet`
+helper is not wired into gameplay. Durable game sessions, persistent player identity,
+and game-specific events remain future work. As more game data is added, the
+Sheets reader and in-memory state can be extended to load and validate those
+fields as part of the same startup/new-game synchronization.

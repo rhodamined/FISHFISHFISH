@@ -5,7 +5,7 @@
     if (status) status.textContent = message;
   };
 
-  // Report the result of the most recent game-code submission in the story.
+  // Report the result of the most recent Player ID submission in the story.
   const setJoinStatus = (message) => {
     const status = document.querySelector('[data-game-join-status]');
     if (status) status.textContent = message;
@@ -17,15 +17,16 @@
   }
 
   const socket = window.io();
-  const gameCodeInput = () => document.querySelector('#game-join-form [name="gameCode"]');
-  let joinedGameCode = sessionStorage.getItem('fishfishfish.gameCode');
+  const playerIdInput = () => document.querySelector('#game-join-form [name="playerId"]');
+  let joinedPlayerId = sessionStorage.getItem('fishfishfish.playerId')
+    || sessionStorage.getItem('fishfishfish.gameCode');
   let playerToken = sessionStorage.getItem('fishfishfish.playerToken');
 
-  // Ask the server to validate a code and join its matching game room.
-  const joinGame = (code) => {
-    setJoinStatus('Checking game code...');
-    const payload = { code };
-    if (playerToken && joinedGameCode === code.trim().toUpperCase()) {
+  // Ask the server to validate a code and join its matching player room.
+  const joinGame = (playerId) => {
+    setJoinStatus('Checking Player ID...');
+    const payload = { playerId };
+    if (playerToken && joinedPlayerId === playerId.trim().toUpperCase()) {
       payload.playerToken = playerToken;
     }
 
@@ -36,33 +37,43 @@
       }
 
       if (!response?.ok) {
-        if (response?.error === 'game_code_taken') {
-          const input = gameCodeInput();
+        if (response?.error === 'invalid_player_token') {
+          sessionStorage.removeItem('fishfishfish.gameCode');
+          sessionStorage.removeItem('fishfishfish.playerId');
+          sessionStorage.removeItem('fishfishfish.playerToken');
+          joinedPlayerId = null;
+          playerToken = null;
+          setJoinStatus('The game has restarted. Please sign in with a Player ID again.');
+          return;
+        }
+        if (response?.error === 'player_id_taken') {
+          const input = playerIdInput();
           if (input) {
             input.value = '';
             input.focus();
           }
-          setJoinStatus('That game code is already in use. Please try a different code.');
+          setJoinStatus('That player ID is already in use. Please try a different ID.');
           return;
         }
-        setJoinStatus(response?.error === 'invalid_game_code'
-          ? 'That game code is not valid.'
+        setJoinStatus(response?.error === 'invalid_player_id'
+          ? 'That player ID is not valid.'
           : 'Unable to join the game. Please try again.');
         return;
       }
 
-      joinedGameCode = response.gameCode;
+      joinedPlayerId = response.playerId;
       playerToken = response.playerToken;
-      sessionStorage.setItem('fishfishfish.gameCode', joinedGameCode);
+      sessionStorage.setItem('fishfishfish.playerId', joinedPlayerId);
+      sessionStorage.removeItem('fishfishfish.gameCode');
       sessionStorage.setItem('fishfishfish.playerToken', playerToken);
-      setJoinStatus(`Joined game ${response.gameCode}.`);
+      setJoinStatus(`Joined as player ${response.playerId}.`);
     });
   };
 
   // Show the pending state while Socket.IO establishes or restores a connection.
   socket.on('connect', () => {
     setConnectionStatus('Connected to game server.');
-    if (joinedGameCode) joinGame(joinedGameCode);
+    if (joinedPlayerId) joinGame(joinedPlayerId);
   });
   // Mark the client ready only after the server's initial handshake event arrives.
   socket.on('server:ready', () => setConnectionStatus('Connected to game server.'));
@@ -71,15 +82,32 @@
   // Surface connection failures in the story instead of leaving the status stale.
   socket.on('connect_error', () => setConnectionStatus('Unable to connect to game server.'));
 
+  // Clear a player's saved identity and return them to the join form after a new game starts.
+  socket.on('game:reset', () => {
+    sessionStorage.removeItem('fishfishfish.gameCode');
+    sessionStorage.removeItem('fishfishfish.playerId');
+    sessionStorage.removeItem('fishfishfish.playerToken');
+    joinedPlayerId = null;
+    playerToken = null;
+
+    const input = playerIdInput();
+    if (input) {
+      input.value = '';
+      input.focus();
+    }
+    setJoinStatus('A new game has started. Please sign in with a player ID.');
+    socket.emit('game:reset:ack');
+  });
+
   // Delegate submit handling so the form continues to work after SugarCube redraws passages.
   document.addEventListener('submit', (event) => {
     const form = event.target;
     if (!(form instanceof HTMLFormElement) || form.id !== 'game-join-form') return;
 
     event.preventDefault();
-    const code = form.elements.namedItem('gameCode')?.value;
-    if (typeof code !== 'string' || code.trim() === '') {
-      setJoinStatus('Enter a game code to continue.');
+    const playerId = form.elements.namedItem('playerId')?.value;
+    if (typeof playerId !== 'string' || playerId.trim() === '') {
+      setJoinStatus('Enter a player ID to continue.');
       return;
     }
     if (!socket.connected) {
@@ -87,11 +115,11 @@
       return;
     }
 
-    joinGame(code);
+    joinGame(playerId);
   });
 
-  if (joinedGameCode && socket.connected) {
-    joinGame(joinedGameCode);
+  if (joinedPlayerId && socket.connected) {
+    joinGame(joinedPlayerId);
   }
 
   window.FishGame = Object.freeze({ socket });

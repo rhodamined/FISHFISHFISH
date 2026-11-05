@@ -3,14 +3,24 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Game Codes</title>
+    <title>Game Dashboard</title>
     <link rel="stylesheet" href="/dashboard/dashboard.css">
     <script src="/socket.io/socket.io.js" defer></script>
     <script src="/dashboard/dashboard.js" defer></script>
   </head>
   <body>
     <main class="dashboard">
-      <section id="game-grid" class="game-grid" aria-label="Game codes and player status"></section>
+      <header class="dashboard-controls">
+        <form id="dashboard-login-form">
+          <label for="dashboard-password">Dashboard password</label>
+          <input id="dashboard-password" name="password" type="password" autocomplete="current-password" required>
+          <button type="submit">Sign in</button>
+          <span id="dashboard-auth-status" role="status"></span>
+        </form>
+        <span id="game-id-info" hidden>Game ID: <span id="game-id"></span></span>
+        <button id="new-game-button" type="button" disabled>New game</button>
+      </header>
+      <section id="game-grid" class="game-grid" aria-label="Player IDs and status"></section>
     </main>
   </body>
 </html>

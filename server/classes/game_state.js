@@ -1,53 +1,82 @@
-const { randomUUID } = require('node:crypto');
+const { randomInt, randomUUID } = require('node:crypto');
 
-const GAME_CODE_COUNT = 10;
+const GAME_ID_CHARACTERS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
 class GameState {
   constructor() {
-    this.gameCodes = new Map();
+    this.players = new Map();
+    this.gameID = null;
+    this.issuedGameIDs = new Set();
   }
 
-  // Replace the in-memory game-code database only after validating the full
-  // spreadsheet result, so invalid input cannot leave partial state behind.
-  setGameCodes(codes) {
-    if (!Array.isArray(codes) || codes.length !== GAME_CODE_COUNT) {
-      throw new Error(`Expected exactly ${GAME_CODE_COUNT} game codes from Google Sheets.`);
-    }
-
-    const normalizedCodes = codes.map((code, index) => {
-      if (typeof code !== 'string' || code.trim() === '') {
-        throw new Error(`Game code ${index + 1} must be a non-empty string.`);
-      }
-
-      return code.trim().toUpperCase();
-    });
-
-    if (new Set(normalizedCodes).size !== GAME_CODE_COUNT) {
-      throw new Error('Google Sheets must provide 10 unique game codes.');
-    }
-
-    this.gameCodes = new Map(normalizedCodes.map((code) => [
-      code,
+  // Start a game only after validating its full player-ID list.
+  startNewGame(playerIds) {
+    const normalizedPlayerIds = this.normalizePlayerIds(playerIds);
+    const gameID = this.createGameID();
+    this.players = new Map(normalizedPlayerIds.map((playerId) => [
+      playerId,
       { playerToken: null, socketId: null, connected: false },
     ]));
+    this.gameID = gameID;
+    return gameID;
   }
 
-  // Return the canonical stored code for a submitted code, or null if unknown.
-  findGameCode(code) {
-    if (typeof code !== 'string') return null;
+  createGameID() {
+    if (this.issuedGameIDs.size >= GAME_ID_CHARACTERS.length ** 6) {
+      throw new Error('Unable to generate a unique game ID.');
+    }
 
-    const normalizedCode = code.trim().toUpperCase();
-    return this.gameCodes.has(normalizedCode) ? normalizedCode : null;
+    let gameID;
+    do {
+      gameID = Array.from({ length: 6 }, () => (
+        GAME_ID_CHARACTERS[randomInt(GAME_ID_CHARACTERS.length)]
+      )).join('');
+    } while (this.issuedGameIDs.has(gameID));
+
+    this.issuedGameIDs.add(gameID);
+    return gameID;
   }
 
-  // Claim an available code, or allow the same player token to resume its claim.
-  claimGameCode(code, playerToken) {
-    const gameCode = this.findGameCode(code);
-    if (!gameCode) return { ok: false, error: 'invalid_game_code' };
+  // Validate and normalize a spreadsheet result without changing active game state.
+  normalizePlayerIds(playerIds) {
+    if (!Array.isArray(playerIds) || playerIds.length === 0) {
+      throw new Error('Google Sheets must provide at least one player ID.');
+    }
 
-    const player = this.gameCodes.get(gameCode);
+    const normalizedPlayerIds = playerIds.map((playerId, index) => {
+      if (typeof playerId !== 'string' || playerId.trim() === '') {
+        throw new Error(`Player ID ${index + 1} must be a non-empty string.`);
+      }
+
+      return playerId.trim().toUpperCase();
+    });
+
+    if (new Set(normalizedPlayerIds).size !== normalizedPlayerIds.length) {
+      throw new Error('Google Sheets must provide unique player IDs.');
+    }
+
+    return normalizedPlayerIds;
+  }
+
+  // Return the canonical player ID for a submitted code, or null if unknown.
+  findPlayerId(value) {
+    if (typeof value !== 'string') return null;
+
+    const normalizedPlayerId = value.trim().toUpperCase();
+    return this.players.has(normalizedPlayerId) ? normalizedPlayerId : null;
+  }
+
+  // Claim an available player ID, or allow its token to resume the claim.
+  claimPlayerId(value, playerToken) {
+    const playerId = this.findPlayerId(value);
+    if (!playerId) return { ok: false, error: 'invalid_player_id' };
+
+    const player = this.players.get(playerId);
     if (player.playerToken && player.playerToken !== playerToken) {
-      return { ok: false, error: 'game_code_taken' };
+      return { ok: false, error: 'player_id_taken' };
+    }
+    if (!player.playerToken && playerToken) {
+      return { ok: false, error: 'invalid_player_token' };
     }
 
     const newlyClaimed = !player.playerToken;
@@ -55,18 +84,18 @@ class GameState {
     player.playerToken = token;
     return {
       ok: true,
-      gameCode,
+      playerId,
       playerToken: token,
       newlyClaimed,
     };
   }
 
-  // Associate a claimed code with its currently connected socket.
-  markPlayerConnected(code, playerToken, socketId) {
-    const gameCode = this.findGameCode(code);
-    if (!gameCode) return false;
+  // Associate a claimed player ID with its currently connected socket.
+  markPlayerConnected(playerId, playerToken, socketId) {
+    playerId = this.findPlayerId(playerId);
+    if (!playerId) return false;
 
-    const player = this.gameCodes.get(gameCode);
+    const player = this.players.get(playerId);
     if (player.playerToken !== playerToken) return false;
 
     player.socketId = socketId;
@@ -74,12 +103,12 @@ class GameState {
     return true;
   }
 
-  // Mark the current socket offline without releasing the player's code.
-  markPlayerDisconnected(code, playerToken, socketId) {
-    const gameCode = this.findGameCode(code);
-    if (!gameCode) return false;
+  // Mark the current socket offline without releasing the player's ID.
+  markPlayerDisconnected(playerId, playerToken, socketId) {
+    playerId = this.findPlayerId(playerId);
+    if (!playerId) return false;
 
-    const player = this.gameCodes.get(gameCode);
+    const player = this.players.get(playerId);
     if (player.playerToken !== playerToken || player.socketId !== socketId) return false;
 
     player.socketId = null;
@@ -87,15 +116,29 @@ class GameState {
     return true;
   }
 
-  // Return public code availability data for the live dashboard.
+  // Clear all player claims and connection states while retaining spreadsheet codes.
+  resetGame() {
+    for (const playerId of this.players.keys()) {
+      this.players.set(playerId, {
+        playerToken: null,
+        socketId: null,
+        connected: false,
+      });
+    }
+  }
+
+  // Return the game ID and player availability data for the dashboard.
   getDashboardState() {
-    return Array.from(this.gameCodes, ([code, player]) => ({
-      code,
-      status: player.playerToken ? 'joined' : 'available',
-      connectionStatus: !player.playerToken
-        ? 'not joined'
-        : player.connected ? 'connected' : 'disconnected',
-    }));
+    return {
+      gameID: this.gameID,
+      players: Array.from(this.players, ([playerId, player]) => ({
+        playerId,
+        status: player.playerToken ? 'joined' : 'available',
+        connectionStatus: !player.playerToken
+          ? 'not joined'
+          : player.connected ? 'connected' : 'disconnected',
+      })),
+    };
   }
 }
 

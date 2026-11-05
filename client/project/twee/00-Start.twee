@@ -13,8 +13,8 @@ FISHFISHFISH
 <p data-fish-connection>Connecting to game server...</p>
 
 <form id="game-join-form">
-  <label for="game-code">Game code</label>
-  <input id="game-code" name="gameCode" type="text" autocomplete="off" required>
+  <label for="player-id">Player ID</label>
+  <input id="player-id" name="playerId" type="text" autocomplete="off" required>
   <button type="submit">Join game</button>
 </form>
 <p data-game-join-status aria-live="polite"></p>

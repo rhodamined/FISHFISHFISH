@@ -6,7 +6,7 @@ const { createServer } = require('node:http');
 const { Server } = require('socket.io');
 const registerSocketHandlers = require('./socket_handlers');
 const GameState = require('./classes/game_state');
-const { readGameCodesFromGSheet } = require('./google_sheets');
+const { readPlayerIdsFromGSheet } = require('./google_sheets');
 
 const app = express();
 const httpServer = createServer(app);
@@ -22,7 +22,7 @@ app.use('/dashboard', express.static(dashboardDirectory));
 app.get('/health', (req, res) => {
   res.json({ ok: true });
 });
-// Serve the separate live game-code dashboard.
+// Serve the separate live game dashboard.
 app.get('/dashboard', (req, res, next) => {
   res.sendFile(path.join(dashboardDirectory, 'index.html'), (error) => {
     if (error) next(error);
@@ -38,15 +38,16 @@ app.get('/', (req, res, next) => {
 
 // Load and validate the game's codes before accepting HTTP or socket clients.
 async function startServer() {
-  const gameCodes = await readGameCodesFromGSheet();
-  gameState.setGameCodes(gameCodes);
-  registerSocketHandlers(io, gameState);
+  const playerIds = await readPlayerIdsFromGSheet();
+  gameState.startNewGame(playerIds);
+  console.info(`[Google Sheets] Sync successful for game ${gameState.gameID}: loaded ${playerIds.length} player IDs.`);
+  registerSocketHandlers(io, gameState, readPlayerIdsFromGSheet);
 
   // Start serving the story and its Socket.IO endpoint on the same port.
   await new Promise((resolve, reject) => {
     const onListening = () => {
       httpServer.off('error', onError);
-      console.log(`FISHFISHFISH server listening on *:${port}`);
+      console.info(`[Game ${gameState.gameID}] FISHFISHFISH server listening on *:${port}`);
       resolve();
     };
     const onError = (error) => {

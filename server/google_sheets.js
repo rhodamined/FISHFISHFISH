@@ -10,10 +10,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 const FISH_SHEETID = process.env.FISH_SHEETID;
 
-// Read the 10 game codes from B2:B11 on the first worksheet.
-async function readGameCodesFromGSheet() {
+// Read non-empty player IDs from row 2 onward in column B of the first worksheet.
+async function readPlayerIdsFromGSheet() {
   if (!FISH_SHEETID) {
-    throw new Error('FISH_SHEETID must be configured before reading game codes from Google Sheets.');
+    throw new Error('FISH_SHEETID must be configured before reading player IDs from Google Sheets.');
   }
 
   const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
@@ -25,14 +25,16 @@ async function readGameCodesFromGSheet() {
     throw new Error('The configured Google spreadsheet does not contain a worksheet.');
   }
 
-  await sheet.loadCells('B2:B11');
-  return Array.from({ length: 10 }, (_, index) => {
+  await sheet.loadCells(`B2:B${sheet.rowCount}`);
+  const playerIds = Array.from({ length: Math.max(0, sheet.rowCount - 1) }, (_, index) => {
     const cell = sheet.getCell(index + 1, 1);
     const value = cell.formattedValue ?? cell.value;
     return typeof value === 'string' || typeof value === 'number'
       ? String(value).trim()
       : '';
-  });
+  }).filter(Boolean);
+
+  return playerIds;
 }
 
 
@@ -86,6 +88,6 @@ async function writeStateToGSheet(state) {
 }
 
 module.exports = {
-  readGameCodesFromGSheet,
+  readPlayerIdsFromGSheet,
   writeStateToGSheet
 }
