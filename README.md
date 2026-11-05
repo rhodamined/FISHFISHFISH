@@ -1,11 +1,10 @@
 # FISHFISHFISH
 
-FISHFISHFISH is an interactive fish game built with a Tweego/SugarCube story
-client and a Node.js/Express server. Socket.IO provides the real-time
-client/server connection. The server is intended to own authoritative game
-state, while the story handles presentation and player interaction.
+FISHFISHFISH is a Tweego/SugarCube game with a Node.js server. Express serves
+the compiled story and a separate live dashboard; Socket.IO handles player
+game-code joins and dashboard updates.
 
-## Architecture
+## Project structure
 
 ```text
 client/
@@ -16,67 +15,55 @@ client/
   build.js            Tweego build wrapper
   dist/               Generated story and client assets
 dashboard/
-  index.html          Separate live game-code dashboard
+  index.html          Live game-code dashboard
   dashboard.js        Dashboard Socket.IO client
-  dashboard.css       Dashboard layout and status styling
+  dashboard.css       Dashboard styling
 server/
   index.js            Express and Socket.IO entry point
-  socket_handlers.js  Socket event registration
-  classes/            In-memory game state
+  socket_handlers.js  Player and dashboard socket events
+  classes/            In-memory game state and tests
   google_oauth.js     Google credential helper
   google_sheets.js    Google Sheets reader and writer
 ```
 
-The root `package.json` provides commands for the app. Express serves the
-generated `client/dist/` files and the Socket.IO endpoint from the same
-origin and port. The separate dashboard is available at `/dashboard`. Both
-browser clients load the Socket.IO library from `/socket.io/socket.io.js`.
+The root `package.json` manages the server and provides scripts to build the
+client. Express serves the compiled client and Socket.IO from the same
+origin. The dashboard is available at `/dashboard`.
 
-On startup, the server reads exactly 10 game codes from cells `B2:B11` on the
-first worksheet in the configured Google spreadsheet. Codes are trimmed and
-compared without case sensitivity. The server validates that all ten entries
-are non-empty and unique before listening; startup fails with an explicit
-error if the spreadsheet cannot be read or its codes are invalid. The loaded
-codes and their join status are held in memory and are not polled or refreshed
-while the server is running. Restart the server to load spreadsheet changes
-or clear joined status.
+## Requirements
 
-The initial socket handshake emits `server:ready` with
-`{ "connected": true }`. Players enter a code in the story form; the client
-sends it using the `game:join` Socket.IO event with `{ "code": "..." }`. The
-server acknowledges a successful join with the canonical `gameCode` and a
-session `playerToken`.
-The token lets that same browser session reconnect without claiming another
-code. Each code can be claimed by only one player token. A subsequent player
-gets `{ "ok": false, "error": "game_code_taken" }`; the form clears the code
-field and prompts them to try another. A successful join places the socket in
-the matching Socket.IO room.
-
-The dashboard subscribes with `dashboard:subscribe` and receives the ten
-codes and their `available`/`joined` status in `dashboard:state`. The server
-broadcasts updated status when a code is first claimed. Dashboard status is
-live for the current server process only.
-
-This is the initial in-memory game-code registry and join flow, not a durable
-gameplay-state database. Game-session state, durable player identity,
-persistence, and gameplay event handling still need to be designed.
-
-Google Sheets code is server-only. `writeStateToGSheet` is available as an
-integration helper but is not currently called by the server's socket
-handlers or game-state classes. Importing the module does not initiate a
-Google API request.
-
-## Prerequisites
-
-- Node.js 22 or newer
-- npm
+- Node.js 22 or newer and npm
 - Tweego installed and available on `PATH`
-- A configured Google spreadsheet with ten unique game codes in `B2:B11`
+- Access to a Google spreadsheet containing ten unique game codes in cells
+  `B2:B11` on its first worksheet
+- Google Application Default Credentials and permission to impersonate the
+  configured service account
 
-The story metadata currently targets SugarCube 2.36.1, the format version
-available in the installed Tweego setup used to verify this scaffold.
+The story targets SugarCube 2.36.1, the format version available in the
+Tweego installation used to verify this project.
+
+## Configure Google Sheets
+
+Set these variables in the repository-root `.env` file:
+
+```dotenv
+FISH_SHEETID=your_spreadsheet_id
+SERVICE_ACCOUNT=service-account@project.iam.gserviceaccount.com
+GOOGLE_APPLICATION_CREDENTIALS=keys/your-credentials-file.json
+```
+
+Keep the credentials JSON in the root `keys/` directory. Do not commit
+credentials or `.env` files.
+
+At startup, the server reads exactly ten codes from the first worksheet's
+`B2:B11` range. It trims whitespace, normalizes codes to uppercase, and
+requires every entry to be non-empty and unique. If Sheets cannot be read or
+the data is invalid, the server reports an error and does not start. Codes
+are loaded only at startup; restart the server to load spreadsheet changes.
 
 ## Build and run
+
+Build the Tweego story, then start the server:
 
 ```sh
 npm install
@@ -84,32 +71,62 @@ npm run build:client
 npm start
 ```
 
-The app is served at `http://localhost:3005` by default. Set `PORT` to change
-the server port.
+By default, the game is served at `http://localhost:3005/` and the dashboard
+at `http://localhost:3005/dashboard`. Set `PORT` to use a different port.
 
-Run the automated server-state and socket-handler tests with `npm test`.
-
-For iterative story development, run these in separate terminals:
+During story development, run the Tweego watcher and server in separate
+terminals:
 
 ```sh
 npm run watch:client
 npm start
 ```
 
-The watch command recompiles the story when Twee sources change. Refresh the
-browser to load the updated build.
+Refresh the browser after the story recompiles. Run the server-state and
+Socket.IO handler tests with:
 
-## Google Sheets configuration
+```sh
+npm test
+```
 
-If/when Sheets persistence is wired into the game, configure these values in
-the server environment:
+## Player join and reconnection
 
-- `FISH_SHEETID`: spreadsheet ID
-- `SERVICE_ACCOUNT`: service account to impersonate
-- `GOOGLE_APPLICATION_CREDENTIALS`: path to the credentials JSON file. With
-  the file stored in the root `keys/` directory, set this relative to the
-  repository root, for example `keys/<credential-file>.json`.
-- Google Application Default Credentials must have the permissions needed to
-  impersonate the configured service account.
+The player enters a code in the story's join form. The client sends
+`game:join` with `{ "code": "..." }`. On success, the server replies with the
+canonical code and an opaque `playerToken`, then places the socket in that
+game's Socket.IO room. Each code can be claimed by only one player. A second
+player receives `game_code_taken`; the form clears the input and asks them to
+try another code.
 
-Do not commit credentials or `.env` files.
+Socket.IO automatically retries a dropped connection. After a successful
+join, the client stores the assigned code and `playerToken` in
+`sessionStorage`. When the socket reconnects, it resubmits both. The server
+recognizes the existing claim, restores the socket to the game's room, and
+marks the player connected. If the player disconnects, their code remains
+claimed and the dashboard reports them as disconnected; another player
+cannot take that code.
+
+The token is kept for the current browser tab session. This reconnect strategy
+and all game status are currently in-memory/session state, not durable
+identity or persistent storage. Restarting the server clears all claims and
+connection statuses; players must join again.
+
+## Dashboard status
+
+The dashboard displays ten cards. Each card shows:
+
+- **Player status:** `Available` until a code is claimed, then `Player joined`.
+- **Connection status:** `Not connected` before a player joins, then
+  `Connected` or `Disconnected` as the player's socket state changes.
+
+The dashboard subscribes with `dashboard:subscribe` and receives the current
+state through `dashboard:state`. The server broadcasts changes to connected
+dashboard clients.
+
+## Current scope
+
+The game-code registry and join status are held in memory. Google Sheets is
+currently read at startup; the `writeStateToGSheet` helper is not wired into
+gameplay. Durable game sessions, persistent player identity, refresh of
+spreadsheet data without restart, and game-specific events remain future
+work.

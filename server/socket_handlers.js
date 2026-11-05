@@ -5,6 +5,7 @@ function registerSocketHandlers(io, gameState) {
     socket.emit('server:ready', { connected: true });
 
     let joinedGameCode = null;
+    let joinedPlayerToken = null;
 
     // Send the latest code availability snapshot to dashboard clients.
     socket.on('dashboard:subscribe', () => {
@@ -39,15 +40,19 @@ function registerSocketHandlers(io, gameState) {
 
       try {
         await socket.join(`game:${claim.gameCode}`);
+        if (!gameState.markPlayerConnected(claim.gameCode, claim.playerToken, socket.id)) {
+          await socket.leave(`game:${claim.gameCode}`);
+          acknowledge({ ok: false, error: 'join_failed' });
+          return;
+        }
         joinedGameCode = claim.gameCode;
+        joinedPlayerToken = claim.playerToken;
         acknowledge({
           ok: true,
           gameCode: claim.gameCode,
           playerToken: claim.playerToken,
         });
-        if (claim.newlyClaimed) {
-          io.emit('dashboard:state', gameState.getDashboardState());
-        }
+        io.emit('dashboard:state', gameState.getDashboardState());
       } catch (error) {
         console.error(`Unable to join game ${claim.gameCode} for socket ${socket.id}.`, error);
         acknowledge({ ok: false, error: 'join_failed' });
@@ -56,6 +61,10 @@ function registerSocketHandlers(io, gameState) {
 
     // Log why this client's connection ended for server-side diagnostics.
     socket.on('disconnect', (reason) => {
+      if (joinedGameCode
+        && gameState.markPlayerDisconnected(joinedGameCode, joinedPlayerToken, socket.id)) {
+        io.emit('dashboard:state', gameState.getDashboardState());
+      }
       console.log(`Socket disconnected: ${socket.id} (${reason})`);
     });
   });

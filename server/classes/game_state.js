@@ -26,7 +26,10 @@ class GameState {
       throw new Error('Google Sheets must provide 10 unique game codes.');
     }
 
-    this.gameCodes = new Map(normalizedCodes.map((code) => [code, null]));
+    this.gameCodes = new Map(normalizedCodes.map((code) => [
+      code,
+      { playerToken: null, socketId: null, connected: false },
+    ]));
   }
 
   // Return the canonical stored code for a submitted code, or null if unknown.
@@ -42,26 +45,56 @@ class GameState {
     const gameCode = this.findGameCode(code);
     if (!gameCode) return { ok: false, error: 'invalid_game_code' };
 
-    const currentToken = this.gameCodes.get(gameCode);
-    if (currentToken && currentToken !== playerToken) {
+    const player = this.gameCodes.get(gameCode);
+    if (player.playerToken && player.playerToken !== playerToken) {
       return { ok: false, error: 'game_code_taken' };
     }
 
-    const token = currentToken || randomUUID();
-    this.gameCodes.set(gameCode, token);
+    const newlyClaimed = !player.playerToken;
+    const token = player.playerToken || randomUUID();
+    player.playerToken = token;
     return {
       ok: true,
       gameCode,
       playerToken: token,
-      newlyClaimed: !currentToken,
+      newlyClaimed,
     };
+  }
+
+  // Associate a claimed code with its currently connected socket.
+  markPlayerConnected(code, playerToken, socketId) {
+    const gameCode = this.findGameCode(code);
+    if (!gameCode) return false;
+
+    const player = this.gameCodes.get(gameCode);
+    if (player.playerToken !== playerToken) return false;
+
+    player.socketId = socketId;
+    player.connected = true;
+    return true;
+  }
+
+  // Mark the current socket offline without releasing the player's code.
+  markPlayerDisconnected(code, playerToken, socketId) {
+    const gameCode = this.findGameCode(code);
+    if (!gameCode) return false;
+
+    const player = this.gameCodes.get(gameCode);
+    if (player.playerToken !== playerToken || player.socketId !== socketId) return false;
+
+    player.socketId = null;
+    player.connected = false;
+    return true;
   }
 
   // Return public code availability data for the live dashboard.
   getDashboardState() {
-    return Array.from(this.gameCodes, ([code, playerToken]) => ({
+    return Array.from(this.gameCodes, ([code, player]) => ({
       code,
-      status: playerToken ? 'joined' : 'available',
+      status: player.playerToken ? 'joined' : 'available',
+      connectionStatus: !player.playerToken
+        ? 'not joined'
+        : player.connected ? 'connected' : 'disconnected',
     }));
   }
 }

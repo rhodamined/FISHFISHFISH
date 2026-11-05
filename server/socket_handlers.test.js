@@ -39,7 +39,13 @@ test('acknowledges valid codes and rejects invalid codes', async () => {
     claimGameCode: (code, token) => code === 'FISH1'
       ? { ok: true, gameCode: code, playerToken: token || 'player-1', newlyClaimed: !token }
       : { ok: false, error: 'invalid_game_code' },
-    getDashboardState: () => [{ code: 'FISH1', status: 'joined' }],
+    markPlayerConnected: () => true,
+    markPlayerDisconnected: () => true,
+    getDashboardState: () => [{
+      code: 'FISH1',
+      status: 'joined',
+      connectionStatus: 'connected',
+    }],
   };
   const socket = new TestSocket();
 
@@ -72,6 +78,8 @@ test('prevents one socket from joining a second game code', async () => {
       playerToken: token || code,
       newlyClaimed: !token,
     }),
+    markPlayerConnected: () => true,
+    markPlayerDisconnected: () => true,
     getDashboardState: () => [],
   };
   const socket = new TestSocket();
@@ -122,7 +130,11 @@ test('rejects a second socket trying to claim an occupied code', async () => {
 test('sends a dashboard snapshot to dashboard subscribers', () => {
   let onConnection;
   const io = { on: (_event, handler) => { onConnection = handler; }, emit: () => {} };
-  const state = [{ code: 'FISH1', status: 'available' }];
+  const state = [{
+    code: 'FISH1',
+    status: 'available',
+    connectionStatus: 'not joined',
+  }];
   const gameState = {
     getDashboardState: () => state,
     findGameCode: () => null,
@@ -135,4 +147,31 @@ test('sends a dashboard snapshot to dashboard subscribers', () => {
   socket.handlers.get('dashboard:subscribe')();
 
   assert.deepEqual(socket.emitted.at(-1), { event: 'dashboard:state', payload: state });
+});
+
+test('updates dashboard connection status on join and disconnect', async () => {
+  let onConnection;
+  const broadcasts = [];
+  const io = {
+    on: (_event, handler) => { onConnection = handler; },
+    emit: (event, payload) => broadcasts.push({ event, payload }),
+  };
+  const GameState = require('./classes/game_state');
+  const gameState = new GameState();
+  gameState.setGameCodes(Array.from({ length: 10 }, (_, index) => `FISH${index + 1}`));
+  const socket = new TestSocket();
+  registerSocketHandlers(io, gameState);
+  onConnection(socket);
+
+  let response;
+  await socket.handlers.get('game:join')({ code: 'FISH1' }, (result) => {
+    response = result;
+  });
+  assert.equal(response.ok, true);
+  assert.equal(broadcasts.at(-1).payload[0].status, 'joined');
+  assert.equal(broadcasts.at(-1).payload[0].connectionStatus, 'connected');
+
+  socket.handlers.get('disconnect')('transport close');
+  assert.equal(broadcasts.at(-1).payload[0].status, 'joined');
+  assert.equal(broadcasts.at(-1).payload[0].connectionStatus, 'disconnected');
 });

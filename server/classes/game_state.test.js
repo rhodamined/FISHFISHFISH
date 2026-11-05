@@ -40,6 +40,30 @@ test('allows one player token per code and reports dashboard status', () => {
   });
 
   const dashboardState = gameState.getDashboardState();
-  assert.deepEqual(dashboardState[0], { code: 'FISH1', status: 'joined' });
-  assert.deepEqual(dashboardState[1], { code: 'FISH2', status: 'available' });
+  assert.deepEqual(dashboardState[0], {
+    code: 'FISH1',
+    status: 'joined',
+    connectionStatus: 'disconnected',
+  });
+  assert.deepEqual(dashboardState[1], {
+    code: 'FISH2',
+    status: 'available',
+    connectionStatus: 'not joined',
+  });
+});
+
+test('disconnecting retains the claim and stale socket disconnects do not override reconnects', () => {
+  const gameState = new GameState();
+  gameState.setGameCodes(codes);
+  const claim = gameState.claimGameCode('FISH1');
+
+  assert.equal(gameState.markPlayerConnected('FISH1', claim.playerToken, 'socket-1'), true);
+  assert.equal(gameState.markPlayerDisconnected('FISH1', claim.playerToken, 'socket-1'), true);
+  assert.equal(gameState.findGameCode('FISH1'), 'FISH1');
+  assert.equal(gameState.getDashboardState()[0].status, 'joined');
+  assert.equal(gameState.getDashboardState()[0].connectionStatus, 'disconnected');
+
+  assert.equal(gameState.markPlayerConnected('FISH1', claim.playerToken, 'socket-2'), true);
+  assert.equal(gameState.markPlayerDisconnected('FISH1', claim.playerToken, 'socket-1'), false);
+  assert.equal(gameState.getDashboardState()[0].connectionStatus, 'connected');
 });
