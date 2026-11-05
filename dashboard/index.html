@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>FISHFISHFISH — Game Dashboard</title>
+    <link rel="stylesheet" href="/dashboard/dashboard.css">
+    <script src="/socket.io/socket.io.js" defer></script>
+    <script src="/dashboard/dashboard.js" defer></script>
+  </head>
+  <body>
+    <main class="dashboard">
+      <header class="dashboard-header">
+        <div>
+          <p class="eyebrow">FISHFISHFISH</p>
+          <h1>Game dashboard</h1>
+        </div>
+        <p id="connection-status" class="connection-status" role="status">Connecting…</p>
+      </header>
+      <section id="game-grid" class="game-grid" aria-label="Game codes and player status"></section>
+    </main>
+  </body>
+</html>

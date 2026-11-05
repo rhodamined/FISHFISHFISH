@@ -10,10 +10,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 const FISH_SHEETID = process.env.FISH_SHEETID;
 
-// Persist the current fish rows to the first worksheet in the configured sheet.
-async function readCodesfromGSheet(state) {
+// Read the 10 game codes from B2:B11 on the first worksheet.
+async function readGameCodesFromGSheet() {
   if (!FISH_SHEETID) {
-    throw new Error('FISH_SHEETID must be configured before writing game state to Google Sheets.');
+    throw new Error('FISH_SHEETID must be configured before reading game codes from Google Sheets.');
   }
 
   const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
@@ -21,15 +21,18 @@ async function readCodesfromGSheet(state) {
 
   await doc.loadInfo(); // loads document properties and worksheets
   const sheet = doc.sheetsByIndex[0]; // or use `doc.sheetsById[id]` or `doc.sheetsByTitle[title]`
+  if (!sheet) {
+    throw new Error('The configured Google spreadsheet does not contain a worksheet.');
+  }
 
-  await sheet.loadCells('A1:C11'); // loads range of cells into local cache - DOES NOT RETURN THE CELLS
-  console.log(sheet.cellStats); // total cells, loaded, how many non-empty
-  
-  // // example
-  // const a1 = sheet.getCell(0, 0); // access cells using a zero-based index
-  const b2 = sheet.getCellByA1('B2'); // or A1 style notation
-
-  console.log(b2.value);
+  await sheet.loadCells('B2:B11');
+  return Array.from({ length: 10 }, (_, index) => {
+    const cell = sheet.getCell(index + 1, 1);
+    const value = cell.formattedValue ?? cell.value;
+    return typeof value === 'string' || typeof value === 'number'
+      ? String(value).trim()
+      : '';
+  });
 }
 
 
@@ -83,6 +86,6 @@ async function writeStateToGSheet(state) {
 }
 
 module.exports = {
-  readCodesfromGSheet,
+  readGameCodesFromGSheet,
   writeStateToGSheet
 }

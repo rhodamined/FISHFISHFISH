@@ -6,7 +6,8 @@
   "scripts": {
     "build:client": "npm --prefix client run build",
     "watch:client": "npm --prefix client run watch",
-    "start": "node server/index.js"
+    "start": "node server/index.js",
+    "test": "node --test"
   },
   "repository": {
     "type": "git",
