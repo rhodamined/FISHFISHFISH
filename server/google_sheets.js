@@ -10,6 +10,28 @@ const dotenv = require('dotenv');
 dotenv.config();
 const FISH_SHEETID = process.env.FISH_SHEETID;
 
+// Persist the current fish rows to the first worksheet in the configured sheet.
+async function readCodesfromGSheet(state) {
+  if (!FISH_SHEETID) {
+    throw new Error('FISH_SHEETID must be configured before writing game state to Google Sheets.');
+  }
+
+  const serviceAccountAuth = await google_auth.getAccessTokenFromImpersonatedCredentials();
+  const doc = new GoogleSpreadsheet(FISH_SHEETID, serviceAccountAuth); // pass in the access token
+
+  await doc.loadInfo(); // loads document properties and worksheets
+  const sheet = doc.sheetsByIndex[0]; // or use `doc.sheetsById[id]` or `doc.sheetsByTitle[title]`
+
+  await sheet.loadCells('A1:C11'); // loads range of cells into local cache - DOES NOT RETURN THE CELLS
+  console.log(sheet.cellStats); // total cells, loaded, how many non-empty
+  
+  // // example
+  // const a1 = sheet.getCell(0, 0); // access cells using a zero-based index
+  const b2 = sheet.getCellByA1('B2'); // or A1 style notation
+
+  console.log(b2.value);
+}
+
 
 // Persist the current fish rows to the first worksheet in the configured sheet.
 async function writeStateToGSheet(state) {
@@ -61,5 +83,6 @@ async function writeStateToGSheet(state) {
 }
 
 module.exports = {
+  readCodesfromGSheet,
   writeStateToGSheet
 }

@@ -12,6 +12,10 @@ const io = new Server(httpServer);
 const clientDist = path.resolve(__dirname, '../client/dist');
 const port = process.env.PORT || 3005;
 
+const gsheet = require('./google_sheets');
+
+gsheet.readCodesfromGSheet();
+
 registerSocketHandlers(io);
 
 app.use(express.static(clientDist));
