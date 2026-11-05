@@ -1,0 +1,5 @@
+/* Adjustments to twine defaults */
+
+#ui-bar {
+  display: none;
+}

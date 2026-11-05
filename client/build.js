@@ -6,16 +6,24 @@ const clientDirectory = __dirname;
 const distDirectory = path.join(clientDirectory, 'dist');
 const watch = process.argv.includes('--watch');
 
+// Combine matching source files in filename order so every stylesheet and
+// script is included consistently in the generated client bundles.
+const bundleSourceFiles = (sourceDirectory, extension) => fs.readdirSync(sourceDirectory, { withFileTypes: true })
+  .filter((entry) => entry.isFile() && path.extname(entry.name) === extension)
+  .sort((left, right) => left.name.localeCompare(right.name))
+  .map((entry) => fs.readFileSync(path.join(sourceDirectory, entry.name), 'utf8'))
+  .join('\n\n');
+
 // Create the generated output folder and copy browser assets beside the story
 // so the Express server can serve them from the same directory.
 fs.mkdirSync(distDirectory, { recursive: true });
-fs.copyFileSync(
-  path.join(clientDirectory, 'src/scripts/client.js'),
+fs.writeFileSync(
   path.join(distDirectory, 'client.js'),
+  bundleSourceFiles(path.join(clientDirectory, 'src/scripts'), '.js'),
 );
-fs.copyFileSync(
-  path.join(clientDirectory, 'src/styles/client.css'),
+fs.writeFileSync(
   path.join(distDirectory, 'client.css'),
+  bundleSourceFiles(path.join(clientDirectory, 'src/styles'), '.css'),
 );
 
 // Tell Tweego to compile the Twee source, inject the shared head markup, and
