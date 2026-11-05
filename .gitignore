@@ -6,7 +6,8 @@
 
 # Data
 /data
-keys
+/keys/
+/server/keys/
 save.json
 /archive
 

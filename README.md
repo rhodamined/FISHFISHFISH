@@ -76,7 +76,10 @@ the server environment:
 
 - `FISH_SHEETID`: spreadsheet ID
 - `SERVICE_ACCOUNT`: service account to impersonate
-- Google Application Default Credentials, including the permissions needed
-  to impersonate that account
+- `GOOGLE_APPLICATION_CREDENTIALS`: path to the credentials JSON file. With
+  the file stored in `server/keys/`, set this relative to the repository root,
+  for example `server/keys/<credential-file>.json`.
+- Google Application Default Credentials must have the permissions needed to
+  impersonate the configured service account.
 
 Do not commit credentials or `.env` files.

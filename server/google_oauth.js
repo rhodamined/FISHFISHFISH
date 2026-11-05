@@ -13,8 +13,9 @@ dotenv.config();
 // https://docs.cloud.google.com/iam/docs/create-short-lived-credentials-direct#rest_1
 // Create Service account; invite service account to relevant docs
 // Create and download a JSON key for service account
-// Put key in file structure; hidden
-// in .env, have a GOOGLE_APPLICATION_CREDENTIALS key, value is the path to the JSON file (getApplicationDefault will auto look for this)
+// Store the credentials JSON under server/keys/ (ignored by Git).
+// Set GOOGLE_APPLICATION_CREDENTIALS in the root .env to a path relative to
+// the repository root, e.g. server/keys/<credential-file>.json.
 // In Google Developer console, make sure Cloud API, Resource Manager API are enabled for project (+ actual project API)
 // Service Accounts > Permissions > Manage Service Account Permissions > Add Another Role > Service Account Token Creator
 
