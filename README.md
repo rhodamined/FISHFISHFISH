@@ -97,11 +97,8 @@ The app is hosted at `fish.sourmilk.xyz`. Nginx handles public HTTP/HTTPS and
 proxies requests to Node on `127.0.0.1:3005`; PM2 keeps the Node process
 running. The subdomain has its own Nginx site configuration, separate from
 the existing `dirt.sourmilk.xyz` and `dirtsocketserver.sourmilk.xyz` sites.
-The deployment is manually triggered from the development machine. The
-script runs tests and builds with local Tweego, commits only the generated
-`client/dist` files, pushes the current branch, then asks the droplet to pull
-the branch and restart the app through PM2. Tweego is not needed on the
-droplet.
+
+Deploy by building from local, pushing to origin master, and pulling from remote SSH. PM2 will automatically reload the site once pulled with new client/dist.
 
 ### One-time setup
 
