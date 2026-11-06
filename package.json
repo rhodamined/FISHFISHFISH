@@ -7,6 +7,7 @@
     "build:client": "npm --prefix client run build",
     "watch:client": "npm --prefix client run watch",
     "start": "node server/index.js",
+    "deploy:manual": "bash scripts/deploy-manual.sh",
     "test": "node --test"
   },
   "repository": {

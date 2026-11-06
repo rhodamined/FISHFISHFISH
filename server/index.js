@@ -14,7 +14,13 @@ const io = new Server(httpServer);
 const clientDist = path.resolve(__dirname, '../client/dist');
 const dashboardDirectory = path.resolve(__dirname, '../dashboard');
 const port = process.env.PORT || 3005;
+const host = process.env.HOST || '127.0.0.1';
 const gameState = new GameState();
+
+if (process.env.NODE_ENV === 'production'
+  && (!process.env.DASHBOARD_PASSWORD || process.env.DASHBOARD_PASSWORD === 'jasper')) {
+  throw new Error('Set a non-default DASHBOARD_PASSWORD before running in production.');
+}
 
 app.use(express.static(clientDist));
 app.use('/dashboard', express.static(dashboardDirectory));
@@ -47,7 +53,7 @@ async function startServer() {
   await new Promise((resolve, reject) => {
     const onListening = () => {
       httpServer.off('error', onError);
-      console.info(`[Game ${gameState.gameID}] FISHFISHFISH server listening on *:${port}`);
+      console.info(`[Game ${gameState.gameID}] FISHFISHFISH server listening on ${host}:${port}`);
       resolve();
     };
     const onError = (error) => {
@@ -57,7 +63,7 @@ async function startServer() {
 
     httpServer.once('listening', onListening);
     httpServer.once('error', onError);
-    httpServer.listen(port);
+    httpServer.listen(port, host);
   });
 }
 
