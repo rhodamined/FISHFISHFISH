@@ -12,9 +12,11 @@ FISHFISHFISH
 :: Start
 <p data-fish-connection>Connecting to game server...</p>
 
+CHOOSE YOUR FISH
+
 <form id="game-join-form">
-  <label for="player-id">Player ID</label>
+  /* <label for="player-id">Player ID</label> */
   <input id="player-id" name="playerId" type="text" autocomplete="off" required>
-  <button type="submit">Join game</button>
+  <button type="submit">This One</button>
 </form>
 <p data-game-join-status aria-live="polite"></p>
